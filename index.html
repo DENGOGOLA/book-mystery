@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>Книга Судьбы</title>
+<style>
+body{background:#111;color:#fff;font-family:Arial;text-align:center;padding:20px}
+#box{max-width:750px;margin:auto;border:2px solid #555;padding:20px}
+button{padding:10px 16px;margin:6px;font-size:14px;cursor:pointer}
+input{padding:8px;font-size:16px}
+table{width:100%;border-collapse:collapse;margin-top:10px}
+td,th{border:1px solid #555;padding:5px}
+</style>
+</head>
+<body>
+
+<div id="box">
+<h1>📘 Книга Судьбы</h1>
+<div id="content"></div>
+</div>
+
+<script>
+const content=document.getElementById("content");
+
+let name="",day=1;
+let food,water,mind,pages;
+let alive=false;
+
+let flags={
+readPage:false,
+burnedPage:false,
+crazy:false,
+metTrader:false
+};
+
+const endings=[
+"Ты стал частью книги.",
+"Ты исчез между строк.",
+"Книга закрылась навсегда.",
+"Ты выжил, но изменился.",
+"Ты стал голосом книги.",
+"История закончилась."
+];
+
+function rand(min,max){return Math.floor(Math.random()*(max-min+1))+min}
+
+// ---------- START ----------
+function startScreen(){
+alive=false;
+content.innerHTML=`
+<h3>📜 Инструкция</h3>
+<p style="text-align:left">
+Ты оказался внутри загадочной книги.<br><br>
+
+<b>📅 Каждый день</b> ты делаешь выбор, и он влияет на выживание и концовку.<br><br>
+
+<b>Ресурсы:</b><br>
+🍞 <b>Еда</b> — если закончится, ты проиграешь.<br>
+💧 <b>Вода</b> — без неё тоже не выжить.<br>
+😵 <b>Разум</b> — если упадёт до 0, ты сойдёшь с ума.<br>
+📄 <b>Страницы</b> — самый ценный ресурс, влияет на события.<br><br>
+
+<b>⚠️ Советы:</b>
+<ul>
+<li>Не трать страницы без причины</li>
+<li>Следи за разумом — он влияет на сюжет</li>
+<li>Иногда лучше ничего не делать</li>
+<li>Чтение и сжигание страниц меняют ход истории</li>
+</ul>
+
+<b>🎯 Цель:</b> прожить как можно больше дней и узнать свою концовку.
+</p>
+
+<hr>
+
+<p>Введи ник:</p>
+<input id="nick"><br><br>
+<button onclick="startGame()">Начать</button>
+`;
+}
+
+function startGame(){
+name=document.getElementById("nick").value||"Безымянный";
+day=1;
+food=rand(5,10);
+water=rand(5,10);
+pages=rand(3,6);
+mind=5;
+alive=true;
+flags={readPage:false,burnedPage:false,crazy:false,metTrader:false};
+nextEvent();
+}
+
+function stats(){
+return `📅 День ${day}<br>
+🍞 ${food} | 💧 ${water} | 😵 ${mind} | 📄 ${pages}`;
+}
+
+// ---------- LOGIC ----------
+function consume(){
+if(day%2===0){food--;water--;}
+if(food<0||water<0)return gameOver("Голод или жажда.");
+if(mind<=0)return gameOver("Ты сошёл с ума.");
+if(mind<=2)flags.crazy=true;
+}
+
+function nextEvent(){
+if(!alive)return;
+consume();
+if(!alive)return;
+
+let events=[
+eventNormal,
+eventWater,
+eventSleep,
+eventRip,
+eventDark,
+eventSilence,
+eventFoodCount,
+eventWetPage
+];
+
+if(Math.random()<0.25 || flags.metTrader && Math.random()<0.4){
+events.push(eventTrader);
+}
+
+if(flags.readPage && Math.random()<0.4)events.push(eventVoice);
+if(flags.burnedPage && Math.random()<0.4)events.push(eventSmoke);
+if(flags.crazy && Math.random()<0.4)events.push(eventHallucination);
+
+events[rand(0,events.length-1)]();
+}
+
+function nextDay(){
+if(!alive)return;
+day++;
+nextEvent();
+}
+
+// ---------- EVENTS ----------
+function eventNormal(){
+render("Ты находишь страницу книги.",[
+{t:"📖 Читать",a:()=>{mind++;pages++;flags.readPage=true;nextDay();}},
+{t:"🔥 Сжечь",a:()=>{food+=2;flags.burnedPage=true;nextDay();}},
+{t:"📄 Оставить",a:()=>{pages++;nextDay();}}
+]);
+}
+
+function eventWater(){
+render("Капает вода.",[
+{t:"💧 Собрать",a:()=>{water++;nextDay();}},
+{t:"❌ Игнорировать",a:()=>nextDay()}
+]);
+}
+
+function eventSleep(){
+render("Ты устал.",[
+{t:"😴 Спать",a:()=>{mind++;nextDay();}},
+{t:"🤪 Не спать",a:()=>{mind--;nextDay();}}
+]);
+}
+
+function eventRip(){
+render("Хочется вырвать страницу.",[
+{t:"📄 Вырвать",a:()=>{pages++;food++;mind--;nextDay();}},
+{t:"❌ Не делать",a:()=>nextDay()}
+]);
+}
+
+function eventDark(){
+render("Темнота давит.",[
+{t:"😱 Паниковать",a:()=>{mind--;nextDay();}},
+{t:"🧘 Держаться",a:()=>{mind++;nextDay();}}
+]);
+}
+
+function eventSilence(){
+render("Тихий день.",[
+{t:"😴 Отдохнуть",a:()=>{mind++;nextDay();}},
+{t:"📖 Читать",a:()=>{mind++;pages++;flags.readPage=true;nextDay();}}
+]);
+}
+
+// ---------- EXTRA EVENTS ----------
+function eventFoodCount(){
+render("Ты пересчитываешь еду.",[
+{t:"📄 Потратить страницу → 🍞 +1",a:()=>{if(pages>0){pages--;food++;}nextDay();}},
+{t:"❌ Не рисковать",a:()=>nextDay()}
+]);
+}
+
+function eventWetPage(){
+render("📄 Страница намокла.",[
+{t:"💧 Выжать воду",a:()=>{if(pages>0){pages--;water++;}nextDay();}},
+{t:"😐 Оставить",a:()=>{if(pages>0){pages--;}nextDay();}}
+]);
+}
+
+// ---------- TRADER ----------
+function eventTrader(){
+flags.metTrader=true;
+render("🧥 Трейдер предлагает обмен.",[
+{t:"📄 2 → 🍞 +1",a:()=>{if(pages>=2){pages-=2;food++;}nextDay();}},
+{t:"📄 2 → 💧 +1",a:()=>{if(pages>=2){pages-=2;water++;}nextDay();}},
+{t:"📄 3 → 😵 +1",a:()=>{if(pages>=3){pages-=3;mind++;}nextDay();}},
+{t:"❌ Уйти",a:()=>nextDay()}
+]);
+}
+
+// ---------- CHAINS ----------
+function eventVoice(){
+render("📢 Книга шепчет тебе.",[
+{t:"👂 Слушать",a:()=>{mind--;nextDay();}},
+{t:"📄 Вырвать страницу",a:()=>{pages++;nextDay();}}
+]);
+}
+
+function eventSmoke(){
+render("💨 Дым от страниц.",[
+{t:"😷 Терпеть",a:()=>{mind--;nextDay();}},
+{t:"🚪 Проветрить",a:()=>{water++;nextDay();}}
+]);
+}
+
+function eventHallucination(){
+render("🤪 Галлюцинации.",[
+{t:"😵 Поддаться",a:()=>{mind--;nextDay();}},
+{t:"🧠 Собраться",a:()=>{mind++;nextDay();}}
+]);
+}
+
+// ---------- UI ----------
+function render(text,buttons){
+let html=`<p>${stats()}</p><p>${text}</p>`;
+buttons.forEach(b=>{
+html+=`<button onclick="${b.a.toString().replace('()=>','')}">${b.t}</button>`;
+});
+content.innerHTML=html;
+}
+
+function gameOver(reason){
+if(!alive)return;
+alive=false;
+let end=endings[rand(0,endings.length-1)];
+content.innerHTML=`
+<h2>💀 КОНЕЦ</h2>
+<p>${reason}</p>
+<p>📖 ${end}</p>
+<p>Ты прожил <b>${day}</b> дней</p>
+<button onclick="startScreen()">🔁 Играть снова</button>
+`;
+}
+
+startScreen();
+</script>
+
+</body>
+</html>
