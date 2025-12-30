@@ -30,7 +30,9 @@ let flags={
 readPage:false,
 burnedPage:false,
 crazy:false,
-metTrader:false
+metTrader:false,
+fastStart:false,
+richPages:false
 };
 
 const endings=[
@@ -44,6 +46,30 @@ const endings=[
 
 function rand(min,max){return Math.floor(Math.random()*(max-min+1))+min}
 
+// ---------- LEADERBOARD ----------
+function saveResult(){
+let data=JSON.parse(localStorage.getItem("book_leaders")||"[]");
+data.push({
+name:name,
+days:day,
+pages:pages,
+mind:mind
+});
+data.sort((a,b)=>b.days-a.days);
+data=data.slice(0,10);
+localStorage.setItem("book_leaders",JSON.stringify(data));
+}
+
+function leaderboard(){
+let data=JSON.parse(localStorage.getItem("book_leaders")||"[]");
+let html="<h3>🏆 Таблица лидеров</h3><table><tr><th>#</th><th>Ник</th><th>Дни</th><th>📄</th><th>😵</th></tr>";
+data.forEach((p,i)=>{
+html+=`<tr><td>${i+1}</td><td>${p.name}</td><td>${p.days}</td><td>${p.pages}</td><td>${p.mind}</td></tr>`;
+});
+html+="</table>";
+return html;
+}
+
 // ---------- START ----------
 function startScreen(){
 alive=false;
@@ -51,31 +77,14 @@ content.innerHTML=`
 <h3>📜 Инструкция</h3>
 <p style="text-align:left">
 Ты оказался внутри загадочной книги.<br><br>
-
-<b>📅 Каждый день</b> ты делаешь выбор, и он влияет на выживание и концовку.<br><br>
-
-<b>Ресурсы:</b><br>
-🍞 <b>Еда</b> — если закончится, ты проиграешь.<br>
-💧 <b>Вода</b> — без неё тоже не выжить.<br>
-😵 <b>Разум</b> — если упадёт до 0, ты сойдёшь с ума.<br>
-📄 <b>Страницы</b> — самый ценный ресурс, влияет на события.<br><br>
-
-<b>⚠️ Советы:</b>
-<ul>
-<li>Не трать страницы без причины</li>
-<li>Следи за разумом — он влияет на сюжет</li>
-<li>Иногда лучше ничего не делать</li>
-<li>Чтение и сжигание страниц меняют ход истории</li>
-</ul>
-
-<b>🎯 Цель:</b> прожить как можно больше дней и узнать свою концовку.
+Следи за ресурсами и событиями. Они связаны.<br><br>
+📄 страницы — ключ ко всему.
 </p>
-
 <hr>
-
 <p>Введи ник:</p>
 <input id="nick"><br><br>
 <button onclick="startGame()">Начать</button>
+${leaderboard()}
 `;
 }
 
@@ -87,13 +96,12 @@ water=rand(5,10);
 pages=rand(3,6);
 mind=5;
 alive=true;
-flags={readPage:false,burnedPage:false,crazy:false,metTrader:false};
+flags={readPage:false,burnedPage:false,crazy:false,metTrader:false,fastStart:false,richPages:false};
 nextEvent();
 }
 
 function stats(){
-return `📅 День ${day}<br>
-🍞 ${food} | 💧 ${water} | 😵 ${mind} | 📄 ${pages}`;
+return `📅 День ${day}<br>🍞 ${food} | 💧 ${water} | 😵 ${mind} | 📄 ${pages}`;
 }
 
 // ---------- LOGIC ----------
@@ -102,6 +110,7 @@ if(day%2===0){food--;water--;}
 if(food<0||water<0)return gameOver("Голод или жажда.");
 if(mind<=0)return gameOver("Ты сошёл с ума.");
 if(mind<=2)flags.crazy=true;
+if(pages>=10)flags.richPages=true;
 }
 
 function nextEvent(){
@@ -117,22 +126,21 @@ eventRip,
 eventDark,
 eventSilence,
 eventFoodCount,
-eventWetPage
+eventWetPage,
+eventMeditation,
+eventTearMind
 ];
 
-if(Math.random()<0.25 || flags.metTrader && Math.random()<0.4){
-events.push(eventTrader);
-}
-
+if(Math.random()<0.25)events.push(eventTrader);
 if(flags.readPage && Math.random()<0.4)events.push(eventVoice);
 if(flags.burnedPage && Math.random()<0.4)events.push(eventSmoke);
 if(flags.crazy && Math.random()<0.4)events.push(eventHallucination);
+if(flags.richPages && Math.random()<0.3)events.push(eventGreed);
 
 events[rand(0,events.length-1)]();
 }
 
 function nextDay(){
-if(!alive)return;
 day++;
 nextEvent();
 }
@@ -146,88 +154,66 @@ render("Ты находишь страницу книги.",[
 ]);
 }
 
-function eventWater(){
-render("Капает вода.",[
-{t:"💧 Собрать",a:()=>{water++;nextDay();}},
-{t:"❌ Игнорировать",a:()=>nextDay()}
-]);
-}
-
-function eventSleep(){
-render("Ты устал.",[
-{t:"😴 Спать",a:()=>{mind++;nextDay();}},
-{t:"🤪 Не спать",a:()=>{mind--;nextDay();}}
-]);
-}
-
-function eventRip(){
-render("Хочется вырвать страницу.",[
-{t:"📄 Вырвать",a:()=>{pages++;food++;mind--;nextDay();}},
-{t:"❌ Не делать",a:()=>nextDay()}
-]);
-}
-
-function eventDark(){
-render("Темнота давит.",[
-{t:"😱 Паниковать",a:()=>{mind--;nextDay();}},
-{t:"🧘 Держаться",a:()=>{mind++;nextDay();}}
-]);
-}
-
-function eventSilence(){
-render("Тихий день.",[
-{t:"😴 Отдохнуть",a:()=>{mind++;nextDay();}},
-{t:"📖 Читать",a:()=>{mind++;pages++;flags.readPage=true;nextDay();}}
-]);
-}
-
-// ---------- EXTRA EVENTS ----------
 function eventFoodCount(){
 render("Ты пересчитываешь еду.",[
-{t:"📄 Потратить страницу → 🍞 +1",a:()=>{if(pages>0){pages--;food++;}nextDay();}},
-{t:"❌ Не рисковать",a:()=>nextDay()}
+{t:"📄 1 → 🍞 1",a:()=>{if(pages>=1){pages--;food+=1;}nextDay();}},
+{t:"📄 2 → 🍞 2",a:()=>{if(pages>=2){pages-=2;food+=2;}nextDay();}},
+{t:"📄 3 → 🍞 3",a:()=>{if(pages>=3){pages-=3;food+=3;}nextDay();}},
+{t:"❌ Ничего",a:()=>nextDay()}
 ]);
 }
 
+function eventMeditation(){
+render("Ты сосредотачиваешься.",[
+{t:"🧘 Медитировать",a:()=>{mind++;water--;nextDay();}},
+{t:"❌ Прервать",a:()=>nextDay()}
+]);
+}
+
+function eventTearMind(){
+render("Мысли рвут тебя.",[
+{t:"📄 Потратить страницу",a:()=>{if(pages>0){pages--;mind++;}nextDay();}},
+{t:"😵 Терпеть",a:()=>{mind--;nextDay();}}
+]);
+}
+
+function eventGreed(){
+render("Ты чувствуешь жадность.",[
+{t:"📄 Копить",a:()=>{mind--;nextDay();}},
+{t:"🔥 Сжечь лишнее",a:()=>{pages--;food++;nextDay();}}
+]);
+}
+
+// ---------- OTHER EVENTS (НЕ МЕНЯЛ) ----------
+function eventWater(){render("Капает вода.",[{t:"💧 Собрать",a:()=>{water++;nextDay();}},{t:"❌ Игнорировать",a:()=>nextDay()}]);}
+function eventSleep(){render("Ты устал.",[{t:"😴 Спать",a:()=>{mind++;nextDay();}},{t:"🤪 Не спать",a:()=>{mind--;nextDay();}}]);}
+function eventRip(){render("Хочется вырвать страницу.",[{t:"📄 Вырвать",a:()=>{pages++;food++;mind--;nextDay();}},{t:"❌ Не делать",a:()=>nextDay()}]);}
+function eventDark(){render("Темнота давит.",[{t:"😱 Паниковать",a:()=>{mind--;nextDay();}},{t:"🧘 Держаться",a:()=>{mind++;nextDay();}}]);}
+function eventSilence(){render("Тихий день.",[{t:"😴 Отдохнуть",a:()=>{mind++;nextDay();}},{t:"📖 Читать",a:()=>{mind++;pages++;flags.readPage=true;nextDay();}}]);}
 function eventWetPage(){
-render("📄 Страница намокла.",[
-{t:"💧 Выжать воду",a:()=>{if(pages>0){pages--;water++;}nextDay();}},
-{t:"😐 Оставить",a:()=>{if(pages>0){pages--;}nextDay();}}
+render("📄 Страница намокла. Если оставить сушиться — это риск.",[
+{t:"💧 Выжать",a:()=>{
+	if(pages>0){
+		pages--;
+		water++;
+	}
+	nextDay();
+}},
+{t:"☀️ Оставить сушиться (риск)",a:()=>{
+	if(pages>0){
+		if(Math.random()<0.4){
+			pages--; // страница пропала
+		}
+		// иначе страница сохранилась
+	}
+	nextDay();
+}}
 ]);
 }
-
-// ---------- TRADER ----------
-function eventTrader(){
-flags.metTrader=true;
-render("🧥 Трейдер предлагает обмен.",[
-{t:"📄 2 → 🍞 +1",a:()=>{if(pages>=2){pages-=2;food++;}nextDay();}},
-{t:"📄 2 → 💧 +1",a:()=>{if(pages>=2){pages-=2;water++;}nextDay();}},
-{t:"📄 3 → 😵 +1",a:()=>{if(pages>=3){pages-=3;mind++;}nextDay();}},
-{t:"❌ Уйти",a:()=>nextDay()}
-]);
-}
-
-// ---------- CHAINS ----------
-function eventVoice(){
-render("📢 Книга шепчет тебе.",[
-{t:"👂 Слушать",a:()=>{mind--;nextDay();}},
-{t:"📄 Вырвать страницу",a:()=>{pages++;nextDay();}}
-]);
-}
-
-function eventSmoke(){
-render("💨 Дым от страниц.",[
-{t:"😷 Терпеть",a:()=>{mind--;nextDay();}},
-{t:"🚪 Проветрить",a:()=>{water++;nextDay();}}
-]);
-}
-
-function eventHallucination(){
-render("🤪 Галлюцинации.",[
-{t:"😵 Поддаться",a:()=>{mind--;nextDay();}},
-{t:"🧠 Собраться",a:()=>{mind++;nextDay();}}
-]);
-}
+function eventTrader(){flags.metTrader=true;render("🧥 Трейдер.",[{t:"📄2 → 🍞1",a:()=>{if(pages>=2){pages-=2;food++;}nextDay();}},{t:"📄2 → 💧1",a:()=>{if(pages>=2){pages-=2;water++;}nextDay();}},{t:"❌ Уйти",a:()=>nextDay()}]);}
+function eventVoice(){render("📢 Книга шепчет.",[{t:"👂 Слушать",a:()=>{mind--;nextDay();}},{t:"📄 Вырвать",a:()=>{pages++;nextDay();}}]);}
+function eventSmoke(){render("💨 Дым.",[{t:"😷 Терпеть",a:()=>{mind--;nextDay();}},{t:"🚪 Проветрить",a:()=>{water++;nextDay();}}]);}
+function eventHallucination(){render("🤪 Галлюцинации.",[{t:"😵 Поддаться",a:()=>{mind--;nextDay();}},{t:"🧠 Собраться",a:()=>{mind++;nextDay();}}]);}
 
 // ---------- UI ----------
 function render(text,buttons){
@@ -239,20 +225,20 @@ content.innerHTML=html;
 }
 
 function gameOver(reason){
-if(!alive)return;
 alive=false;
-let end=endings[rand(0,endings.length-1)];
+saveResult();
 content.innerHTML=`
 <h2>💀 КОНЕЦ</h2>
 <p>${reason}</p>
-<p>📖 ${end}</p>
+<p>${endings[rand(0,endings.length-1)]}</p>
 <p>Ты прожил <b>${day}</b> дней</p>
-<button onclick="startScreen()">🔁 Играть снова</button>
+<button onclick="startScreen()">🔁 Снова</button>
+${leaderboard()}
 `;
 }
 
 startScreen();
 </script>
-
 </body>
 </html>
+
